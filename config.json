@@ -1,0 +1,25 @@
+{
+  "triggers": {
+    "price_below_threshold": {
+      "enabled": true,
+      "threshold": 60000
+    },
+    "new_absolute_minimum": {
+      "enabled": true
+    },
+    "sharp_drop_24h": {
+      "enabled": true,
+      "drop_rub": 5000,
+      "drop_percent": 7
+    },
+    "daily_summary": {
+      "enabled": true,
+      "time": "09:00"
+    },
+    "quiet_hours": {
+      "enabled": true,
+      "start": "23:00",
+      "end": "08:00"
+    }
+  }
+}

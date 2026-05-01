@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Coral Tour Price Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; max-width: 1100px; margin: 20px auto; padding: 0 16px; color: #1a1a1a; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .meta { color: #666; font-size: 14px; margin-bottom: 20px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 16px 0; }
+  .stat { background: #f5f5f7; padding: 12px 14px; border-radius: 10px; }
+  .stat .label { font-size: 12px; color: #666; }
+  .stat .value { font-size: 18px; font-weight: 600; margin-top: 4px; }
+  .chart-block { margin: 24px 0; padding: 16px; background: #fff; border: 1px solid #eee; border-radius: 12px; }
+  .chart-block h2 { font-size: 16px; margin: 0 0 12px; }
+  canvas { max-height: 380px; }
+  .triggers { margin-top: 24px; }
+  .triggers .row { display: flex; gap: 8px; padding: 6px 0; font-size: 14px; }
+</style>
+</head>
+<body>
+<h1>Coral Tour Price Monitor</h1>
+<div class="meta" id="meta">Загрузка…</div>
+
+<div class="stats" id="stats"></div>
+
+<div class="chart-block">
+  <h2>За сутки</h2>
+  <canvas id="chart24h"></canvas>
+</div>
+
+<div class="chart-block">
+  <h2>Вся история</h2>
+  <canvas id="chartAll"></canvas>
+</div>
+
+<div class="triggers" id="triggers"></div>
+
+<script>
+async function loadCSV() {
+  const r = await fetch('../data/prices.csv?t=' + Date.now());
+  const text = await r.text();
+  const lines = text.trim().split('\n').slice(1);
+  return lines.map(l => {
+    const [ts, amount, currency, room, meal] = l.split(',');
+    return { ts: new Date(ts), amount: +amount, currency, room, meal };
+  });
+}
+async function loadConfig() {
+  try {
+    const r = await fetch('../config.json?t=' + Date.now());
+    return await r.json();
+  } catch { return null; }
+}
+function fmtRub(n) { return n.toLocaleString('ru-RU', { maximumFractionDigits: 0 }) + ' ₽'; }
+
+function renderStats(data) {
+  if (!data.length) return;
+  const last = data[data.length - 1];
+  const day = data.filter(d => d.ts >= new Date(Date.now() - 86400000));
+  const minAll = Math.min(...data.map(d => d.amount));
+  const maxAll = Math.max(...data.map(d => d.amount));
+  const stats = [
+    ['Текущая', fmtRub(last.amount)],
+    ['Мин. за сутки', day.length ? fmtRub(Math.min(...day.map(d => d.amount))) : '—'],
+    ['Макс. за сутки', day.length ? fmtRub(Math.max(...day.map(d => d.amount))) : '—'],
+    ['Мин. за всё время', fmtRub(minAll)],
+    ['Макс. за всё время', fmtRub(maxAll)],
+    ['Замеров', data.length],
+  ];
+  document.getElementById('stats').innerHTML = stats
+    .map(([l, v]) => `<div class="stat"><div class="label">${l}</div><div class="value">${v}</div></div>`)
+    .join('');
+  document.getElementById('meta').textContent =
+    `Обновлено: ${last.ts.toLocaleString('ru-RU')} · ${last.room || ''} ${last.meal ? '· ' + last.meal : ''}`;
+}
+
+function makeChart(canvasId, data, allData) {
+  const minVal = Math.min(...allData.map(d => d.amount));
+  const maxVal = Math.max(...allData.map(d => d.amount));
+  const minIdxs = allData.map((d, i) => d.amount === minVal ? i : -1).filter(i => i >= 0);
+  const maxIdxs = allData.map((d, i) => d.amount === maxVal ? i : -1).filter(i => i >= 0);
+
+  new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: {
+      datasets: [
+        {
+          label: 'Цена, ₽',
+          data: data.map(d => ({ x: d.ts, y: d.amount })),
+          borderColor: '#0066cc',
+          backgroundColor: 'rgba(0,102,204,0.08)',
+          tension: 0.2,
+          pointRadius: 2,
+          fill: true,
+        },
+        {
+          label: 'Минимумы',
+          data: data.filter(d => d.amount === minVal).map(d => ({ x: d.ts, y: d.amount })),
+          backgroundColor: '#22c55e',
+          borderColor: '#22c55e',
+          showLine: false,
+          pointRadius: 6,
+          pointStyle: 'triangle',
+        },
+        {
+          label: 'Максимумы',
+          data: data.filter(d => d.amount === maxVal).map(d => ({ x: d.ts, y: d.amount })),
+          backgroundColor: '#ef4444',
+          borderColor: '#ef4444',
+          showLine: false,
+          pointRadius: 6,
+          pointStyle: 'rectRot',
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      scales: {
+        x: { type: 'time', time: { displayFormats: { hour: 'dd MMM HH:mm' } } },
+        y: { ticks: { callback: v => fmtRub(v) } },
+      },
+      plugins: {
+        tooltip: { callbacks: { label: ctx => fmtRub(ctx.parsed.y) } },
+      },
+    },
+  });
+}
+
+function renderTriggers(config) {
+  if (!config) return;
+  const t = config.triggers || {};
+  const html = ['<h2 style="font-size:16px">Триггеры</h2>'];
+  for (const [name, cfg] of Object.entries(t)) {
+    const mark = cfg.enabled ? '🟢' : '🔴';
+    html.push(`<div class="row">${mark} <code>${name}</code></div>`);
+  }
+  document.getElementById('triggers').innerHTML = html.join('');
+}
+
+(async () => {
+  const data = await loadCSV();
+  const config = await loadConfig();
+  renderStats(data);
+  renderTriggers(config);
+  const day = data.filter(d => d.ts >= new Date(Date.now() - 86400000));
+  if (day.length) makeChart('chart24h', day, day);
+  if (data.length) makeChart('chartAll', data, data);
+})();
+</script>
+</body>
+</html>
