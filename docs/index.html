@@ -6,6 +6,7 @@
 <title>Coral Tour Price Monitor</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5/papaparse.min.js"></script>
 <style>
   body { font-family: -apple-system, system-ui, sans-serif; max-width: 1100px; margin: 20px auto; padding: 0 16px; color: #1a1a1a; }
   h1 { font-size: 22px; margin-bottom: 4px; }
@@ -23,6 +24,7 @@
 </head>
 <body>
 <h1>Coral Tour Price Monitor</h1>
+<p class="meta" style="margin-top:0">Цена включает обязательные доплаты за рейс</p>
 <div class="meta" id="meta">Загрузка…</div>
 
 <div class="stats" id="stats"></div>
@@ -43,11 +45,12 @@
 async function loadCSV() {
   const r = await fetch('../data/prices.csv?t=' + Date.now());
   const text = await r.text();
-  const lines = text.trim().split('\n').slice(1);
-  return lines.map(l => {
-    const [ts, amount, currency, room, meal] = l.split(',');
-    return { ts: new Date(ts), amount: +amount, currency, room, meal };
-  });
+  const parsed = Papa.parse(text, { header: true, skipEmptyLines: true, dynamicTyping: true });
+  return parsed.data.map(row => ({
+    ts: new Date(row.timestamp_msk),
+    amount: row.amount,
+    currency: row.currency,
+  }));
 }
 async function loadConfig() {
   try {
@@ -75,7 +78,7 @@ function renderStats(data) {
     .map(([l, v]) => `<div class="stat"><div class="label">${l}</div><div class="value">${v}</div></div>`)
     .join('');
   document.getElementById('meta').textContent =
-    `Обновлено: ${last.ts.toLocaleString('ru-RU')} · ${last.room || ''} ${last.meal ? '· ' + last.meal : ''}`;
+    `Обновлено: ${last.ts.toLocaleString('ru-RU')}`;
 }
 
 function makeChart(canvasId, data, allData) {

@@ -38,7 +38,7 @@ def find_key_recursive(obj, key):
 
 
 def fetch_price():
-    """Возвращает (min_price, currency, room_name, meal_type) или None при ошибке."""
+    """Возвращает dict с ключами amount, currency, raw или raises при ошибке."""
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                       "(KHTML, like Gecko) Chrome/120.0 Safari/537.36"
@@ -63,8 +63,6 @@ def fetch_price():
     return {
         "amount": cheapest["price"]["amount"],
         "currency": cheapest["price"]["currency"],
-        "room": cheapest.get("rooms", [{}])[0].get("name", ""),
-        "meal": cheapest.get("rooms", [{}])[0].get("mealType", {}).get("name", ""),
         "raw": cheapest,
     }
 
@@ -75,13 +73,11 @@ def append_price_to_csv(price_data):
     with open(CSV_PATH, "a", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         if is_new:
-            w.writerow(["timestamp_msk", "amount", "currency", "room", "meal"])
+            w.writerow(["timestamp_msk", "amount", "currency"])
         w.writerow([
             datetime.now(MSK).isoformat(),
             price_data["amount"],
             price_data["currency"],
-            price_data["room"],
-            price_data["meal"],
         ])
 
 
@@ -159,9 +155,7 @@ def check_triggers(price_data, history, config):
             alerts.append((
                 "price_below_threshold",
                 f"🔥 ЦЕНА УПАЛА НИЖЕ ПОРОГА!\n\n"
-                f"Текущая: {current:,.0f} ₽ ≤ {thr:,.0f} ₽\n"
-                f"Номер: {price_data['room']}\n"
-                f"Питание: {price_data['meal']}",
+                f"Текущая: {current:,.0f} ₽ ≤ {thr:,.0f} ₽",
                 True,
             ))
 
@@ -293,8 +287,7 @@ def main():
         lambda msg: broadcast(token, subscribers, msg)
     )
 
-    print(f"OK: {price_data['amount']} {price_data['currency']} | "
-          f"{price_data['room']} | {price_data['meal']}")
+    print(f"OK: {price_data['amount']} {price_data['currency']}")
 
 
 if __name__ == "__main__":
