@@ -1,6 +1,8 @@
 name: Monitor Coral Price
 
 on:
+  push:
+    branches: [master]
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
